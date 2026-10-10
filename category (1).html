@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"><title>Select Sector</title><link rel="stylesheet" href="style.css">
+</head>
+<body class="terminal-body" onload="initTheme()">
+    <div class="terminal-header">
+        <div><strong style="font-size: 18px;">GLOBAL MARKETS HUB</strong></div>
+        <div class="header-btns">
+            <span id="userName" style="color: #3b82f6; font-weight: bold;"></span>
+            <button onclick="toggleTheme()">☀️/🌙</button>
+            <button onclick="logout()">EXIT</button>
+        </div>
+    </div>
+
+    <div class="category-grid">
+        <div class="category-card" onclick="nav('all')"><div class="category-icon">🌐</div><h3>ALL MARKETS</h3><p class="text-gray" style="margin-top:8px;font-size:12px;">View 60+ Auctions</p></div>
+        <div class="category-card" onclick="nav('bank')"><div class="category-icon">🏦</div><h3>BANK AUCTIONS</h3><p class="text-gray" style="margin-top:8px;font-size:12px;">NPA Foreclosures</p></div>
+        <div class="category-card" onclick="nav('real_estate')"><div class="category-icon">🏢</div><h3>REAL ESTATE</h3><p class="text-gray" style="margin-top:8px;font-size:12px;">Properties & Land</p></div>
+        <div class="category-card" onclick="nav('vehicles')"><div class="category-icon">🚗</div><h3>VEHICLES</h3><p class="text-gray" style="margin-top:8px;font-size:12px;">Cars & Transport</p></div>
+        <div class="category-card" onclick="nav('electronics')"><div class="category-icon">💻</div><h3>LIQUIDATION</h3><p class="text-gray" style="margin-top:8px;font-size:12px;">Machinery & Tech</p></div>
+        
+        <!-- NEW HISTORICAL REPORTS BUTTON -->
+        <div class="category-card" onclick="window.location.href='history.html'" style="border-color: #3b82f6;">
+            <div class="category-icon">📊</div><h3>HISTORICAL REPORTS</h3><p class="text-gray" style="margin-top:8px;font-size:12px;">View Audit Logs & Past Bids</p>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+    <script>
+        document.getElementById('userName').innerText = checkAuth('user').name.toUpperCase();
+        function nav(cat) { localStorage.setItem('selectedCategory', cat); window.location.href = 'user.html'; }
+    </script>
+</body>
+</html>

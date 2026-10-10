@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"><title>Historical Reports</title><link rel="stylesheet" href="style.css">
+</head>
+<body class="terminal-body" onload="initTheme()">
+    <div class="terminal-header">
+        <div>
+            <button onclick="window.location.href='category.html'" class="header-btns" style="background: rgba(255,255,255,0.1); border: none;">← BACK</button>
+            <strong style="font-size: 18px; letter-spacing: 1px; margin-left: 15px;" id="reportTitle">AUDIT LEDGER</strong>
+        </div>
+        <div class="header-btns" style="display: flex; gap: 10px;">
+            <!-- NEW: EXPORT CSV BUTTON -->
+            <button onclick="downloadCSV()" style="background: rgba(34, 197, 94, 0.2); color: #4ade80; border-color: #22c55e;">📥 EXPORT CSV</button>
+            <button onclick="toggleTheme()">☀️/🌙</button>
+            <button onclick="logout()">EXIT</button>
+        </div>
+    </div>
+
+    <div style="padding: 20px; max-width: 1200px; margin: 0 auto; height: calc(100vh - 60px); overflow-y: auto;">
+        <div class="panel animate-slide-up">
+            <h3 style="margin-bottom: 15px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px;">Global Bid History</h3>
+            <table class="data-table">
+                <thead>
+                    <tr><th>TIMESTAMP</th><th>LOT ID</th><th>ASSET NAME</th><th>BIDDER NAME</th><th style="text-align: right;">BID AMOUNT (₹)</th></tr>
+                </thead>
+                <tbody id="historyTable"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+    <script>
+        checkAuth();
+        let currentBidsList = []; // Store it globally for the CSV export
+
+        function loadHistory() {
+            const auctions = JSON.parse(localStorage.getItem('auctions_v4')) || [];
+            currentBidsList = []; // Reset
+
+            auctions.forEach(auction => {
+                auction.bids.forEach(bid => {
+                    if(bid.bidder !== "System") {
+                        currentBidsList.push({
+                            time: new Date(bid.timeStamp).toLocaleString(), // Full date for CSV
+                            rawTime: bid.timeStamp,
+                            lot: auction.id,
+                            asset: auction.title,
+                            bidder: bid.bidder,
+                            amount: bid.amount
+                        });
+                    }
+                });
+            });
+
+            currentBidsList.sort((a, b) => b.rawTime - a.rawTime);
+
+            let tbody = '';
+            currentBidsList.forEach(b => {
+                let timeOnly = new Date(b.rawTime).toLocaleTimeString();
+                tbody += `<tr>
+                    <td class="text-gray font-mono">${timeOnly}</td>
+                    <td class="text-white">${b.lot}</td>
+                    <td>${b.asset}</td>
+                    <td class="text-blue">${b.bidder}</td>
+                    <td style="text-align: right;" class="text-green">${formatINR(b.amount)}</td>
+                </tr>`;
+            });
+            document.getElementById('historyTable').innerHTML = tbody;
+        }
+
+        // --- NEW FEATURE: EXPORT DATA TO SPREADSHEET ---
+        function downloadCSV() {
+            if (currentBidsList.length === 0) return alert("No data to export.");
+            
+            // 1. Create CSV Header
+            let csvContent = "Timestamp,Lot ID,Asset Name,Bidder Name,Bid Amount (INR)\n";
+            
+            // 2. Add Rows
+            currentBidsList.forEach(row => {
+                // Wrap strings in quotes to prevent comma breaking in Excel
+                csvContent += `"${row.time}","${row.lot}","${row.asset}","${row.bidder}",${row.amount}\n`;
+            });
+
+            // 3. Create a Blob and trigger a download link
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            const url = URL.createObjectURL(blob);
+            
+            link.setAttribute("href", url);
+            link.setAttribute("download", `auction_audit_ledger_${new Date().getTime()}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        setInterval(loadHistory, 3000);
+        loadHistory();
+    </script>
+</body>
+</html>

@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"><title>System Login</title><link rel="stylesheet" href="style.css">
+</head>
+<body class="terminal-body" onload="initTheme()">
+    <div class="auth-container">
+        <!-- Added Animation Class Here -->
+        <div class="panel animate-slide-up" style="width: 380px;">
+            <h2 style="text-align: center; margin-bottom: 25px; letter-spacing: 2px;">AUTO<span style="color: #a855f7">AUCTION</span></h2>
+            
+            <div id="loginForm">
+                <input type="text" id="username" placeholder="Username (e.g. rahul99)">
+                <input type="password" id="password" placeholder="Password (123)">
+                <button class="header-btns" style="width: 100%; padding: 12px; margin: 15px 0 0 0; background: #a855f7; border:none; color: white;" onclick="login()">ENTER SYSTEM</button>
+                <p style="text-align: center; margin-top: 20px; font-size: 13px; color: #a3a3a3;">New user? <a href="#" style="color: #a855f7; font-weight: bold; text-decoration: none;" onclick="toggleAuth()">Register</a></p>
+            </div>
+            
+            <div id="signupForm" class="hidden">
+                <input type="text" id="newName" placeholder="Full Name">
+                <input type="text" id="newUsername" placeholder="Create Username">
+                <input type="password" id="newPassword" placeholder="Create Password">
+                <select id="newRole">
+                    <option value="user">User (Bidder)</option>
+                    <option value="seller">Seller (List Assets)</option>
+                    <option value="admin">System Admin</option>
+                </select>
+                <button class="header-btns" style="width: 100%; padding: 12px; margin: 15px 0 0 0; background: #3b82f6; border:none; color: white;" onclick="signup()">CREATE ACCOUNT</button>
+                <p style="text-align: center; margin-top: 20px; font-size: 13px;"><a href="#" style="color: #3b82f6; font-weight: bold; text-decoration: none;" onclick="toggleAuth()">Back to Login</a></p>
+            </div>
+        </div>
+    </div>
+    <script src="app.js"></script>
+    <script>
+        function toggleAuth() { document.getElementById('loginForm').classList.toggle('hidden'); document.getElementById('signupForm').classList.toggle('hidden'); }
+        function login() {
+            const u = document.getElementById('username').value;
+            const p = document.getElementById('password').value;
+            const users = JSON.parse(localStorage.getItem('users_v4'));
+            const user = users.find(x => x.username === u && x.password === p);
+            if (user) {
+                localStorage.setItem('currentUser', JSON.stringify(user));
+                if (user.role === 'admin') window.location.href = 'admin.html';
+                else if (user.role === 'seller') window.location.href = 'seller.html';
+                else window.location.href = 'category.html';
+            } else { alert('Invalid Credentials!'); }
+        }
+        function signup() {
+            const users = JSON.parse(localStorage.getItem('users_v4'));
+            users.push({
+                name: document.getElementById('newName').value, username: document.getElementById('newUsername').value,
+                password: document.getElementById('newPassword').value, role: document.getElementById('newRole').value, isBot: false
+            });
+            localStorage.setItem('users_v4', JSON.stringify(users));
+            alert('Registered!'); toggleAuth();
+        }
+    </script>
+</body>
+</html>

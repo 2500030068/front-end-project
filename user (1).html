@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"><title>Live Market</title><link rel="stylesheet" href="style.css">
+</head>
+<body class="terminal-body" onload="initTheme()">
+    <div class="terminal-header">
+        <div style="display: flex; align-items: center;">
+            <button onclick="window.location.href='category.html'" class="header-btns" style="background: rgba(255,255,255,0.1); border: none;">← BACK</button>
+            <strong style="font-size: 18px; letter-spacing: 1px; margin-left: 15px;" id="marketTitle">MARKET WATCH</strong>
+        </div>
+        <div class="header-btns" style="display: flex; align-items: center;">
+            <div id="soundToggleBtn" class="sound-toggle" onclick="toggleSound()">🔇 Sound: OFF</div>
+            <span id="userName" style="color: #a855f7; font-weight: bold; margin: 0 15px; font-family: monospace;"></span>
+            <button onclick="window.location.href='vault.html'">MY VAULT</button>
+            <button onclick="window.location.href='history.html'">REPORTS</button>
+            <button onclick="toggleTheme()">☀️/🌙</button>
+        </div>
+    </div>
+
+    <div class="search-container animate-slide-up" style="flex-direction: column; align-items: flex-start;">
+        <div class="sub-tabs">
+            <button class="tab-btn active" onclick="setFilter('all', this)">All Assets</button>
+            <button class="tab-btn" onclick="setFilter('live', this)">🔴 Live Now</button>
+            <button class="tab-btn" onclick="setFilter('ending', this)">⏳ Ending Soon</button>
+            <button class="tab-btn" onclick="setFilter('mybids', this)">🏆 My Bids</button>
+        </div>
+        <input type="text" id="searchInput" class="search-box" style="width: 100%;" placeholder="Search by Asset Name, Lot ID, Location..." onkeyup="renderMarketWatch()">
+    </div>
+
+    <div class="market-table animate-slide-up">
+        <div class="table-row table-header">
+            <div>ACTION</div><div>LOT</div><div>ASSET SYMBOL</div><div>YR</div><div>COND</div><div>LOC</div><div>SELLER</div>
+            <div style="text-align: right;">RESERVE (₹)</div><div style="text-align: right;">BIDS</div>
+            <div style="text-align: right;">CURRENT (₹) & TREND</div><div style="text-align: right;">BIDDER</div><div style="text-align: right;">TIME LEFT</div>
+        </div>
+        <div id="marketWatchBody" style="height: calc(100vh - 220px); overflow-y: auto;"></div>
+    </div>
+
+    <script src="app.js"></script>
+    <script>
+        const user = checkAuth('user');
+        const selectedCategory = localStorage.getItem('selectedCategory') || 'all';
+        document.getElementById('marketTitle').innerText = selectedCategory === 'all' ? "GLOBAL MARKET (ALL)" : `${selectedCategory.toUpperCase()} MARKET`;
+        document.getElementById('userName').innerText = `CLIENT: ${user.name.toUpperCase()}`;
+
+        let currentFilter = 'all';
+        let previousBidsCount = {}; 
+
+        function toggleSound() {
+            const isOn = initAudio();
+            const btn = document.getElementById('soundToggleBtn');
+            btn.className = isOn ? "sound-toggle on" : "sound-toggle";
+            btn.innerHTML = isOn ? "🔊 Sound: ON" : "🔇 Sound: OFF";
+        }
+
+        function setFilter(filter, el) {
+            currentFilter = filter;
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            el.classList.add('active');
+            renderMarketWatch();
+        }
+
+        function setAutoPilot(carId) {
+            let auctions = JSON.parse(localStorage.getItem('auctions_v4'));
+            let item = auctions.find(a => a.id === carId);
+            let limit = prompt(`Enable Auto-Pilot for ${item.title}\n\nEnter your MAXIMUM budget limit (₹):`);
+            if (!limit || isNaN(limit)) return;
+            item.proxy = { bidder: user.name, maxLimit: Number(limit) };
+            localStorage.setItem('auctions_v4', JSON.stringify(auctions));
+            showToast(`Auto-Pilot engaged up to ${formatINR(Number(limit))}`, "success");
+            renderMarketWatch();
+        }
+
+        // GENERATE MINI CHART
+        function generateTrendChart(bids) {
+            // Get the last 8 bids to form the chart
+            const recentBids = bids.slice(-8); 
+            if (recentBids.length < 2) return ''; // Need at least 2 bids to show a trend
+            
+            const maxBid = recentBids[recentBids.length - 1].amount;
+            const minBid = recentBids[0].amount;
+            const range = maxBid - minBid || 1; // Prevent division by zero
+
+            let barsHtml = '';
+            recentBids.forEach(bid => {
+                // Calculate height percentage (min 20%, max 100%)
+                const heightPct = Math.max(20, ((bid.amount - minBid) / range) * 100);
+                const colorClass = bid.bidder === user.name ? 'you' : (bid.bidder === 'System' ? '' : 'bot');
+                barsHtml += `<div class="trend-bar ${colorClass}" style="height: ${heightPct}%;"></div>`;
+            });
+            return `<div class="trend-container">${barsHtml}</div>`;
+        }
+
+        function renderMarketWatch() {
+            let allAuctions = JSON.parse(localStorage.getItem('auctions_v4'));
+            let tbody = document.getElementById('marketWatchBody');
+            let searchQuery = document.getElementById('searchInput').value.toLowerCase();
+            let htmlBuffer = '';
+            const now = Date.now();
+
+            allAuctions.forEach((item) => {
+                const bidsCount = item.bids.length;
+                const latestBid = item.bids[bidsCount - 1];
+                const isMe = latestBid.bidder === user.name;
+                const diff = item.endTime - now;
+                const isEnded = diff <= 0;
+
+                if (selectedCategory !== 'all' && item.category !== selectedCategory) return;
+                if (currentFilter === 'live' && isEnded) return;
+                if (currentFilter === 'ending' && (isEnded || diff > 120000)) return; 
+                if (currentFilter === 'mybids' && !isMe) return;
+                
+                const searchString = `${item.id} ${item.title} ${item.location} ${item.seller}`.toLowerCase();
+                if (searchQuery && !searchString.includes(searchQuery)) return;
+
+                let timeText = "SOLD";
+                let flashClass = "";
+                let pricePopClass = "";
+                
+                if (previousBidsCount[item.id] && previousBidsCount[item.id] < bidsCount && !isEnded) {
+                    pricePopClass = "price-pop"; 
+                    playSound('bid'); 
+                }
+                previousBidsCount[item.id] = bidsCount;
+
+                if (!isEnded) {
+                    const m = Math.floor((diff % 3600000) / 60000);
+                    const s = Math.floor((diff % 60000) / 1000);
+                    timeText = `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+                    if (diff < 10000) playSound('urgent');
+                    if (now - latestBid.timeStamp < 1500) flashClass = isMe ? "flash-green-row" : "flash-blue-row";
+                }
+                if (isEnded && now - item.endTime < 2000) playSound('sold');
+
+                let rowClass = isEnded ? 'row-sold' : flashClass;
+                let bidColorClass = isEnded ? "text-gray" : (isMe ? "text-green" : (bidsCount > 1 ? "text-red" : "text-blue"));
+                let timeColorClass = isEnded ? "text-red" : (diff < 60000 ? "urgent-time" : "text-yellow");
+                let hasAutoPilot = item.proxy && item.proxy.bidder === user.name;
+
+                htmlBuffer += `
+                    <div class="table-row ${rowClass}">
+                        <!-- FIXED: Using flex gap instead of margins to prevent squishing -->
+                        <div style="display: flex; gap: 6px; align-items: center;">
+                            <button class="action-btn buy" ${isEnded ? 'disabled' : `onclick="userBid('${item.id}', 'min')"`} title="Bid Minimum">+</button>
+                            <button class="action-btn jump" ${isEnded ? 'disabled' : `onclick="userBid('${item.id}', 'jump')"`} title="Jump 10%">J</button>
+                            <button class="action-btn auto" ${isEnded ? 'disabled' : `onclick="setAutoPilot('${item.id}')"`} title="Set Auto-Pilot">🤖</button>
+                        </div>
+                        <div class="text-white">${item.id}</div>
+                        <div class="text-white">${item.title} ${hasAutoPilot && !isEnded ? '<span class="auto-active-badge">AUTO</span>' : ''}</div>
+                        <div class="text-gray">${item.year}</div>
+                        <div class="text-gray">${item.condition}</div>
+                        <div class="text-gray">${item.location}</div>
+                        <div class="text-gray">${item.seller.substring(0,12)}</div>
+                        <div style="text-align: right;" class="text-gray">${formatINR(item.basePrice)}</div>
+                        <div style="text-align: right;" class="${isEnded ? 'text-gray' : 'text-white'}">${bidsCount - 1}</div>
+                        
+                        <!-- NEW: Price AND Mini Chart -->
+                        <div style="text-align: right; display: flex; flex-direction: column; justify-content: flex-end;">
+                            <span class="${bidColorClass} ${pricePopClass}" style="font-size: 14px;">${formatINR(latestBid.amount)}</span>
+                            ${generateTrendChart(item.bids)}
+                        </div>
+
+                        <div style="text-align: right;" class="${bidColorClass}">
+                            ${isEnded && bidsCount > 1 ? `<span class="winner-tag">🏆 ${latestBid.bidder.toUpperCase()}</span>` : (isMe ? 'YOU' : latestBid.bidder)}
+                        </div>
+                        <div style="text-align: right;" class="${timeColorClass}">${timeText}</div>
+                    </div>
+                `;
+            });
+            tbody.innerHTML = htmlBuffer;
+        }
+
+        function userBid(carId, type) {
+            let auctions = JSON.parse(localStorage.getItem('auctions_v4'));
+            let item = auctions.find(a => a.id === carId);
+            let currentHighest = item.bids[item.bids.length - 1].amount;
+            let increment = item.basePrice > 1000000 ? 50000 : 10000;
+            let newAmount = type === 'min' ? currentHighest + increment : currentHighest + (currentHighest * 0.10);
+            
+            item.bids.push({ bidder: user.name, amount: Math.round(newAmount), timeStamp: Date.now() });
+            localStorage.setItem('auctions_v4', JSON.stringify(auctions));
+            renderMarketWatch();
+        }
+
+        setInterval(() => {
+            let auctions = JSON.parse(localStorage.getItem('auctions_v4'));
+            let active = auctions.filter(a => Date.now() < a.endTime);
+            if (active.length > 0) {
+                for(let i=0; i<2; i++) {
+                    let randCar = active[Math.floor(Math.random() * active.length)];
+                    let curMax = randCar.bids[randCar.bids.length - 1].amount;
+                    let randBot = BOT_NAMES[Math.floor(Math.random() * BOT_NAMES.length)].replace("_", " ");
+                    let inc = randCar.basePrice > 1000000 ? 50000 : 10000;
+                    randCar.bids.push({ bidder: randBot, amount: curMax + inc, timeStamp: Date.now() });
+                }
+                localStorage.setItem('auctions_v4', JSON.stringify(auctions));
+            }
+        }, 3000);
+
+        setInterval(() => { 
+            runProxyBidders(); 
+            maintainMarketHealth(); 
+            renderMarketWatch(); 
+        }, 1000);
+        
+        renderMarketWatch();
+    </script>
+</body>
+</html>

@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"><title>System Admin</title><link rel="stylesheet" href="style.css">
+</head>
+<body class="terminal-body" onload="initTheme()" style="overflow-y: auto;">
+    <div class="terminal-header">
+        <div><strong style="font-size: 18px;">SYS-ADMIN CONTROL CENTER</strong></div>
+        <div class="header-btns">
+            <span id="userName" style="color: #3b82f6; margin-right: 15px; font-weight: bold;"></span>
+            <button onclick="toggleTheme()">☀️/🌙</button>
+            <button onclick="logout()">LOGOUT</button>
+        </div>
+    </div>
+
+    <div style="padding: 20px;">
+        <div class="dash-grid">
+            <div class="panel">
+                <div class="text-gray" style="font-size: 12px; margin-bottom: 5px;">ACTIVE CONNECTIONS</div>
+                <div class="stat-value" id="totalUsers">0</div>
+            </div>
+            <div class="panel">
+                <div class="text-gray" style="font-size: 12px; margin-bottom: 5px;">TOTAL MARKET ASSETS</div>
+                <div class="stat-value" id="totalAuctions">0</div>
+            </div>
+            <div class="panel">
+                <div class="text-gray" style="font-size: 12px; margin-bottom: 5px;">TOTAL SYSTEM VALUE</div>
+                <div class="stat-value text-green" id="totalValue">₹ 0</div>
+            </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+            <div class="panel">
+                <h3 style="margin-bottom: 15px;">Registered Accounts Database</h3>
+                <table class="data-table">
+                    <thead><tr><th>USERNAME</th><th>FULL NAME</th><th>ROLE</th></tr></thead>
+                    <tbody id="userTable"></tbody>
+                </table>
+            </div>
+
+            <div class="panel">
+                <h3 style="margin-bottom: 15px;">Live Market Health</h3>
+                <table class="data-table">
+                    <thead><tr><th>LOT ID</th><th>CATEGORY</th><th>BIDS</th><th>STATUS</th></tr></thead>
+                    <tbody id="auctionTable"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+    <script>
+        document.getElementById('userName').innerText = `ROOT ACCESS: ${checkAuth('admin').name.toUpperCase()}`;
+
+        function renderAdminData() {
+            const users = JSON.parse(localStorage.getItem('users_v4'));
+            const auctions = JSON.parse(localStorage.getItem('auctions_v4'));
+
+            document.getElementById('totalUsers').innerText = users.length;
+            document.getElementById('totalAuctions').innerText = auctions.length;
+            let val = auctions.reduce((sum, acc) => sum + acc.basePrice, 0);
+            document.getElementById('totalValue').innerText = formatINR(val);
+
+            // Notice: Bots are completely invisible now. They look like normal users.
+            let uHtml = '';
+            users.forEach(u => {
+                uHtml += `<tr><td>${u.username}</td><td>${u.name}</td><td>${u.role.toUpperCase()}</td></tr>`;
+            });
+            document.getElementById('userTable').innerHTML = uHtml;
+
+            let aHtml = '';
+            auctions.slice(0, 15).forEach(a => {
+                let isEnded = a.endTime < Date.now();
+                let status = isEnded ? '<span class="text-gray">SOLD / ENDED</span>' : '<span class="text-green">LIVE</span>';
+                aHtml += `<tr><td>${a.id}</td><td>${a.category.toUpperCase()}</td><td>${a.bids.length - 1}</td><td>${status}</td></tr>`;
+            });
+            document.getElementById('auctionTable').innerHTML = aHtml;
+        }
+        setInterval(renderAdminData, 2000); renderAdminData();
+    </script>
+</body>
+</html>

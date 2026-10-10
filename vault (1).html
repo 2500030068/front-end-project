@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"><title>My Vault</title><link rel="stylesheet" href="style.css">
+</head>
+<body class="terminal-body" onload="initTheme()" style="overflow-y: auto;">
+    <div class="terminal-header">
+        <div>
+            <button onclick="window.history.back()" class="header-btns" style="background: rgba(255,255,255,0.1); border: none;">← BACK</button>
+            <strong style="font-size: 18px; letter-spacing: 1px; margin-left: 15px;">MY VAULT & ANALYTICS</strong>
+        </div>
+        <div class="header-btns">
+            <span id="userName" style="color: #a855f7; font-weight: bold; margin-right: 15px;"></span>
+            <button onclick="toggleTheme()">☀️/🌙</button>
+            <button onclick="logout()">EXIT</button>
+        </div>
+    </div>
+
+    <div style="padding: 40px; max-width: 1200px; margin: 0 auto; font-family: monospace;">
+        <div id="dynamicDashboard">
+            <!-- Dashboard injected here via JS based on Role -->
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+    <script>
+        const user = checkAuth();
+        document.getElementById('userName').innerText = `${user.role.toUpperCase()}: ${user.name}`;
+
+        function loadVault() {
+            const auctions = JSON.parse(localStorage.getItem('auctions_v4')) || [];
+            const now = Date.now();
+            let html = '';
+
+            // --- BUYER / USER VAULT ---
+            if (user.role === 'user') {
+                let wonAuctions = [];
+                let totalSpent = 0;
+
+                auctions.forEach(a => {
+                    if (a.endTime < now) { // Only count SOLD items
+                        const winner = a.bids[a.bids.length - 1];
+                        if (winner.bidder === user.name && a.bids.length > 1) {
+                            wonAuctions.push({...a, winningBid: winner.amount});
+                            totalSpent += winner.amount;
+                        }
+                    }
+                });
+
+                html = `
+                    <div class="dash-grid">
+                        <div class="panel">
+                            <div class="text-gray">AUCTIONS WON</div>
+                            <div class="stat-value text-white">${wonAuctions.length}</div>
+                        </div>
+                        <div class="panel">
+                            <div class="text-gray">TOTAL MONEY SPENT</div>
+                            <div class="stat-value text-red">- ${formatINR(totalSpent)}</div>
+                        </div>
+                    </div>
+                    <div class="panel mt-4">
+                        <h3 class="mb-4 text-blue">YOUR ACQUIRED ASSETS</h3>
+                        <table class="data-table">
+                            <thead><tr><th>LOT ID</th><th>ASSET</th><th>SELLER</th><th>FINAL PRICE PAID</th></tr></thead>
+                            <tbody>
+                                ${wonAuctions.map(a => `<tr><td>${a.id}</td><td>${a.title}</td><td>${a.seller}</td><td class="text-green">${formatINR(a.winningBid)}</td></tr>`).join('')}
+                                ${wonAuctions.length === 0 ? '<tr><td colspan="4" class="text-gray text-center">You have not won any auctions yet.</td></tr>' : ''}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            }
+
+            // --- SELLER VAULT ---
+            else if (user.role === 'seller') {
+                let myListings = auctions.filter(a => a.seller === user.name);
+                let soldItems = myListings.filter(a => a.endTime < now && a.bids.length > 1);
+                let activeItems = myListings.filter(a => a.endTime > now);
+                let totalRevenue = soldItems.reduce((sum, a) => sum + a.bids[a.bids.length-1].amount, 0);
+
+                html = `
+                    <div class="dash-grid">
+                        <div class="panel">
+                            <div class="text-gray">ACTIVE LISTINGS</div>
+                            <div class="stat-value text-white">${activeItems.length}</div>
+                        </div>
+                        <div class="panel">
+                            <div class="text-gray">ASSETS SOLD</div>
+                            <div class="stat-value text-blue">${soldItems.length}</div>
+                        </div>
+                        <div class="panel border-green-500">
+                            <div class="text-gray">TOTAL REVENUE EARNED</div>
+                            <div class="stat-value text-green">+ ${formatINR(totalRevenue)}</div>
+                        </div>
+                    </div>
+                    <div class="panel mt-4">
+                        <h3 class="mb-4 text-blue">SELLER HISTORY</h3>
+                        <table class="data-table">
+                            <thead><tr><th>LOT ID</th><th>ASSET</th><th>WINNER</th><th>SOLD FOR</th></tr></thead>
+                            <tbody>
+                                ${soldItems.map(a => `<tr><td>${a.id}</td><td>${a.title}</td><td>${a.bids[a.bids.length-1].bidder}</td><td class="text-green">${formatINR(a.bids[a.bids.length-1].amount)}</td></tr>`).join('')}
+                                ${soldItems.length === 0 ? '<tr><td colspan="4" class="text-gray text-center">No sales completed yet.</td></tr>' : ''}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            }
+
+            // --- ADMIN VAULT (Platform Finance) ---
+            else if (user.role === 'admin') {
+                let allSold = auctions.filter(a => a.endTime < now && a.bids.length > 1);
+                let totalMarketVolume = allSold.reduce((sum, a) => sum + a.bids[a.bids.length-1].amount, 0);
+                let platformCommission = totalMarketVolume * 0.02; // Platform takes 2% cut
+
+                html = `
+                    <div class="dash-grid">
+                        <div class="panel">
+                            <div class="text-gray">TOTAL ASSETS SOLD GLOBALLY</div>
+                            <div class="stat-value text-white">${allSold.length}</div>
+                        </div>
+                        <div class="panel">
+                            <div class="text-gray">TOTAL MARKET VOLUME</div>
+                            <div class="stat-value text-blue">${formatINR(totalMarketVolume)}</div>
+                        </div>
+                        <div class="panel">
+                            <div class="text-gray">PLATFORM COMMISSION REVENUE (2%)</div>
+                            <div class="stat-value text-green" style="text-shadow: 0 0 10px rgba(74,222,128,0.5);">+ ${formatINR(platformCommission)}</div>
+                        </div>
+                    </div>
+                    <div class="panel mt-4">
+                        <h3 class="mb-4 text-a855f7" style="color: #a855f7;">RECENT HIGH-VALUE TRANSACTIONS (Top 5)</h3>
+                        <table class="data-table">
+                            <thead><tr><th>LOT ID</th><th>ASSET</th><th>SELLER</th><th>BUYER</th><th>COMMISSION EARNED (2%)</th></tr></thead>
+                            <tbody>
+                                ${allSold.sort((a,b) => b.bids[b.bids.length-1].amount - a.bids[a.bids.length-1].amount).slice(0,5).map(a => {
+                                    let finalPrice = a.bids[a.bids.length-1].amount;
+                                    return `<tr><td>${a.id}</td><td>${a.title}</td><td>${a.seller}</td><td>${a.bids[a.bids.length-1].bidder}</td><td class="text-green">+ ${formatINR(finalPrice * 0.02)}</td></tr>`;
+                                }).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            }
+
+            document.getElementById('dynamicDashboard').innerHTML = html;
+        }
+
+        // Auto refresh
+        setInterval(loadVault, 3000);
+        loadVault();
+    </script>
+</body>
+</html>
